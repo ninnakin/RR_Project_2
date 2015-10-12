@@ -1,0 +1,66 @@
+---
+title: "Reproducible Research: Peer Assessment 2"
+output: 
+  html_document:
+    keep_md: true
+---
+#  Title: 
+
+## Synopsis: max 10 sentences description of analysis and results
+
+Answer the following questions: 
+1) Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+2) Across the United States, which types of events have the greatest economic consequences?
+
+## Data Processing
+The data is downloaded from [this repository: ](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) to the variable *stormdata* Some documentation for the dataset can be found [here: ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+```{r readdata, cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2","stormdata.csv.bz2")
+stormdata.full<- read.csv(bzfile("stormdata.csv.bz2"), header = TRUE, na.strings = "")
+```
+
+To make the data easier to work with column names have been transformed to lower case and only the columns of the data concerning damage caused by weather are kept. I am also adding the column year to see which events are causing more damage during recent years. 
+```{r processdata}
+library(dplyr)
+library(lubridate)
+names(stormdata.full)<-tolower(names(stormdata.full))
+stormdata <- select(stormdata.full, evtype, bgn_date, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp)
+stormdata$year <- year(as.Date(stormdata$bgn_date,"%m/%d/%Y"))
+stormdata <- select(stormdata, -bgn_date)
+rm(stormdata.full)
+
+```
+
+## Exploratory analysis
+
+Which events are included in the data?
+```{r}
+names(stormdata)
+
+summary(stormdata)
+
+unique(stormdata$EVTYPE)
+
+# sum fatalities by event type and sort to show events with most fatalities
+stormdata.fatal <- stormdata %>% group_by(evtype) %>% summarize(fatalities = sum(fatalities))
+stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
+
+# sum fatalities by event type and sort to show events with most fatalities
+stormdata.injur <- stormdata %>% group_by(evtype) %>% summarize(injuries = sum(injuries))
+stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
+
+```
+
+Some things to consider: 
+- which event has the largest total number of injuries/fatalities since the start of data collection
+- which has the largest number of fatalities/injuries in a single instance?
+- which has the largest number of injuries/fatalities in 'modern times' 
+
+## Results
+
+
+
+
+
+
