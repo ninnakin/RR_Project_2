@@ -44,19 +44,28 @@ unique(stormdata$evtype)
 
 stormdata$evtype<-tolower(stormdata$evtype)
 
-stormdata$evtype_cleaned<- gsub("[0-9]*","", stormdata$evtype)
-stormdata$evtype_cleaned<- gsub("[\\.\\(\\)]*","", stormdata$evtype_cleaned)
-stormdata$evtype_cleaned<- gsub("[-/]*"," ", stormdata$evtype_cleaned)
-stormdata$evtype_cleaned<- gsub("^[ ]*","",  stormdata$evtype_cleaned)
+# remove special characters and trailing/leading spaces 
+stormdata$evtype_cleaned<- gsub("[0-9]*[\\.\\(\\)]*","", stormdata$evtype)
+stormdata$evtype_cleaned<- gsub("[-/:]"," ", stormdata$evtype_cleaned)
+stormdata$evtype_cleaned<- gsub("^[ ]","",  stormdata$evtype_cleaned)
+stormdata$evtype_cleaned<- sub("[ ]$", "", stormdata$evtype_cleaned)
 
 # Gather all event types containing the word "summary"
 # Replace the abbreviation TSTM with "Thunderstorm"
-stormdata$evtype_cleaned<-gsub("tstm", "thunderstorm", stormdata$evtype_cleaned, ignore.case = TRUE);
-stormdata$evtype_cleaned<-gsub("WINDS", "wind", stormdata$evtype_cleaned, ignore.case = TRUE);
-stormdata$evtype_cleaned<-gsub("storms", "storm", stormdata$evtype_cleaned, ignore.case = TRUE);
-stormdata$evtype_cleaned<-gsub("FLOODING", "flood", stormdata$evtype_cleaned, ignore.case = TRUE);
-stormdata$evtype_cleaned<-gsub("currents", "current", stormdata$evtype_cleaned, ignore.case = TRUE);
-stormdata$evtype_cleaned<-gsub("fires", "fire", stormdata$evtype_cleaned, ignore.case = TRUE);
+replace <- c("tstm", "winds", "storms", "flooding", "currents", "fires")
+with    <- c("thunderstorm", "wind", "storm", "flood", "current", "fire")
+
+for(i in seq_along(replace)){
+    stormdata$evtype_cleaned<-gsub(replace[i], with[i], stormdata$evtype_cleaned)
+}
+
+# Rename events containing certain patterns 
+pattern <- c("summary", "flood", "tide", "thunderstorm", "heat", "cold", "chill", "wild fire", "thunderstorm", "lightning", "winter weather", "hail")
+newname <- c("summary", "flood (several types)", "tide (several types)", "thunderstorm", "heat (several types)", "cold (several types)", "wind chill", "wildfire", "thunderstorm/lightning", "thunderstorm/lightning", "winter weather", "hail")
+
+for(i in seq_along(pattern){
+    stormdata$evtype_cleaned[grep(pattern[i],stormdata$evtype_cleaned,ignore.case = TRUE)]<-newname[i]
+}
 
 # rename
 stormdata$evtype_cleaned[grep("summary",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"summary"
