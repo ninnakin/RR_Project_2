@@ -16,38 +16,75 @@ Answer the following questions:
 ## Data Processing
 The data is downloaded from [this repository: ](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) to the variable *stormdata* Some documentation for the dataset can be found [here: ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
 ```{r readdata, cache=TRUE}
-download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2","stormdata.csv.bz2")
+if (!file.exists("stormdata.csv.bz2")){
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2","stormdata.csv.bz2", method = "curl")}
 stormdata.full<- read.csv(bzfile("stormdata.csv.bz2"), header = TRUE, na.strings = "")
 ```
 
 To make the data easier to work with column names have been transformed to lower case and only the columns of the data concerning damage caused by weather are kept. I am also adding the column year to see which events are causing more damage during recent years. 
-```{r processdata}
+```{r processdata, eval=FALSE}
 library(dplyr)
 library(lubridate)
 names(stormdata.full)<-tolower(names(stormdata.full))
-stormdata <- select(stormdata.full, evtype, bgn_date, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp)
-stormdata$year <- year(as.Date(stormdata$bgn_date,"%m/%d/%Y"))
-stormdata <- select(stormdata, -bgn_date)
+stormdata <- select(stormdata.full, evtype, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp)
+stormdata$year <- year(as.Date(stormdata.full$bgn_date,"%m/%d/%Y"))
 rm(stormdata.full)
-
 ```
 
 ## Exploratory analysis
 
 Which events are included in the data?
-```{r}
+```{r exploratory1, echo=TRUE}
 names(stormdata)
 
 summary(stormdata)
 
-unique(stormdata$EVTYPE)
+# order alphabetically to find similar terms coded differently
+unique(stormdata$evtype)
+
+stormdata$evtype<-tolower(stormdata$evtype)
+
+stormdata$evtype_cleaned<- gsub("[0-9]*","", stormdata$evtype)
+stormdata$evtype_cleaned<- gsub("[\\.\\(\\)]*","", stormdata$evtype_cleaned)
+stormdata$evtype_cleaned<- gsub("[-/]*"," ", stormdata$evtype_cleaned)
+stormdata$evtype_cleaned<- gsub("^[ ]*","",  stormdata$evtype_cleaned)
+
+# Gather all event types containing the word "summary"
+# Replace the abbreviation TSTM with "Thunderstorm"
+stormdata$evtype_cleaned<-gsub("tstm", "thunderstorm", stormdata$evtype_cleaned, ignore.case = TRUE);
+stormdata$evtype_cleaned<-gsub("WINDS", "wind", stormdata$evtype_cleaned, ignore.case = TRUE);
+stormdata$evtype_cleaned<-gsub("storms", "storm", stormdata$evtype_cleaned, ignore.case = TRUE);
+stormdata$evtype_cleaned<-gsub("FLOODING", "flood", stormdata$evtype_cleaned, ignore.case = TRUE);
+stormdata$evtype_cleaned<-gsub("currents", "current", stormdata$evtype_cleaned, ignore.case = TRUE);
+stormdata$evtype_cleaned<-gsub("fires", "fire", stormdata$evtype_cleaned, ignore.case = TRUE);
+
+# rename
+stormdata$evtype_cleaned[grep("summary",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"summary"
+stormdata$evtype_cleaned[grep("flood",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"flood (several types)"
+stormdata$evtype_cleaned[grep("tide",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"tide (several types)"
+stormdata$evtype_cleaned[grep("thunderstorm",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm"
+stormdata$evtype_cleaned[grep("heat",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"heat (several types)"
+stormdata$evtype_cleaned[grep("cold",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"cold (several types)"
+stormdata$evtype_cleaned[grep("wind chill",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wind chill"
+stormdata$evtype_cleaned[grep("windchill",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wind chill"
+stormdata$evtype_cleaned[grep("wild fire",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wildfire"
+stormdata$evtype_cleaned[grep("thunderstorm",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm/lightning"
+stormdata$evtype_cleaned[grep("lightning",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm/lightning"
+stormdata$evtype_cleaned[grep("winter weather",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"winter weather"
+stormdata$evtype_cleaned[grep("hail",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"hail"
+
+# Replace "winds" with "wind"
+
+stormdata.common <- stormdata %>% count(evtype_cleaned)
+stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
+
 
 # sum fatalities by event type and sort to show events with most fatalities
-stormdata.fatal <- stormdata %>% group_by(evtype) %>% summarize(fatalities = sum(fatalities))
+stormdata.fatal <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatalities = sum(fatalities))
 stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
 
 # sum fatalities by event type and sort to show events with most fatalities
-stormdata.injur <- stormdata %>% group_by(evtype) %>% summarize(injuries = sum(injuries))
+stormdata.injur <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries))
 stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
 
 ```
@@ -56,6 +93,8 @@ Some things to consider:
 - which event has the largest total number of injuries/fatalities since the start of data collection
 - which has the largest number of fatalities/injuries in a single instance?
 - which has the largest number of injuries/fatalities in 'modern times' 
+
+Furthermore: Not all events are properöy described, some similar events are not grouped together, some are not spelled correctly etc.
 
 ## Results
 
