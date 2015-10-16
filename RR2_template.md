@@ -1,15 +1,15 @@
 # Reproducible Research: Peer Assessment 2
-#  Title: 
+#  Damage to poulation and economy from weather in the United States 
 
-## Synopsis: max 10 sentences description of analysis and results
+## Synopsis
+I have used the Storm Data dataset provided by the National Weather Service to analyse which weather events are most harmful. The analysis looks at two aspectes of damage; damage to population health and economic damage. This analysis looks at damage from weather from year 2000-2011, identifying the events causing the largest numbers of fatalities and injuries as well as the events leading to the largest costs from property and crop damage. 
 
-Answer the following questions: 
-1) Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+My analysis shows that the events that cause most population damage are excessive heat, tornados, floods and thunderstorm. 
 
-2) Across the United States, which types of events have the greatest economic consequences?
+When it comes to economic damage, floods cause by far the most damage when looking at all years. During 2011 tornados cause the most damage, but this pattern is not repeated for other years. 
 
 ## Data Processing
-The data is downloaded from [this repository: ](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) to the variable *stormdata* Some documentation for the dataset can be found [here: ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+This study is based on the National Weather Services' Storm Data dataset, and can be downloaded from [here.](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) It includes data on damage from weather event in the United States from 1950 up to 2011. It is read and loaded to the variable *stormdata* Some documentation for the dataset can be found [here. ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
 
 ```r
 if (!file.exists("stormdata.csv.bz2")){
@@ -17,15 +17,19 @@ download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.
 stormdata.full<- read.csv(bzfile("stormdata.csv.bz2"), header = TRUE, na.strings = "")
 ```
 
-The data is processed in the following steps:
-- Column names have been transformed to lower case 
-- Only the columns of the data concerning damage caused by weather, i.e. the ones needed for this analysis, are kept
-- The column *year* is added
-- A new column called *evtype_cleaned* is created, this contains the information from *evtype* modified in the following way:
-    - All event names are transformed to lower case and special characters and leading and trailing spaces are removed
-    - Some common variations and abbrevations for events are replaced with a standard event name, e.g. "TSTM"" is replaced by "thunderstorm"
-    - Similar events are grouped together, e.g. all event contained the word "flood" are mapped to the event type "floods (several types)" 
-- New columns with the calculated value of crop damagae, property damage and total economic (crop and property combined) are added
+The data is processed in the following steps: 
+
+1. Column names have been transformed to lower case 
+2. Only the columns of the data concerning damage caused by weather, i.e. the ones needed for this analysis, are kept
+3. The column *year* is added
+4. A new column called *evtype_cleaned* is created, this contains the information from *evtype* modified in the following ways:
+    + All event names are transformed to lower case and special characters and leading and trailing spaces are removed
+    + Some common variations and abbrevations for events are replaced with a standard event name, e.g. "TSTM"" is replaced by "thunderstorm"
+    + Similar events are grouped together, e.g. all event contained the word "flood" are mapped to the event type "floods (several types)" 
+5. New columns with the calculated value of crop damage, property damage and total economic damage (crop and property damages combined) are added and stored in the columns *propdmgest*, *cropdmgest*, and *dmgest*.
+6. The data is limited to data reported during year 2000 or later. The reason for this is twofold: 
+    + Firstly, Events that took place more than ten years ago (relative to the last date of the dataset) is not relevant for assessing how to prevent damage from events that happened today. The measures we take to prevent damage from weather events have changed (and hopefully improved) greatly since the 1950s
+    + We do not have as much data from the early years of the dataset as we have for the later years (see exploratory analysis), for example, the first reports of economic damage are from 1995. 
 
 
 ```r
@@ -48,12 +52,12 @@ library(dplyr)
 ```r
 library(lubridate)
 names(stormdata.full)<-tolower(names(stormdata.full))
-stormdata <- select(stormdata.full, evtype, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp)
-stormdata$year <- year(as.Date(stormdata.full$bgn_date,"%m/%d/%Y"))
-rm(stormdata.full)
+stormdata.full$year <- year(as.Date(stormdata.full$bgn_date,"%m/%d/%Y"))
+stormdata <- select(stormdata.full, evtype, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp, year)
+stormdata <- filter(stormdata, year>=2000)
 ```
 
-
+Processing of the event type:
 
 ```r
 # remove special characters and trailing/leading spaces 
@@ -82,6 +86,7 @@ for(i in seq_along(pattern)){
 rm(i, pattern, newname)
 ```
 
+Processing the values for the cost for crop and property damage: 
 
 ```r
 # Assign a numeric value to the crop and property damage by translating the alphabetical magnuítudes to numeric values 
@@ -101,170 +106,13 @@ for(i in seq_along(alphabetic)){
     crop_ind <- which(stormdata$cropdmgexp==alphabetic[i] & !is.na(stormdata$cropdmg))
     stormdata$cropdmgest[crop_ind] <-  magnitude[i]*stormdata$cropdmg[crop_ind]
 }
-rm(i,prop_ind,crop_ind,alphabetic,magnitude)
-
 stormdata$dmgest <- stormdata$cropdmgest+stormdata$propdmgest
-```
-
-## Exploratory analysis
-
-Which events are included in the data?
-
-```r
-names(stormdata)
-```
-
-```
-##  [1] "evtype"         "fatalities"     "injuries"       "propdmg"       
-##  [5] "propdmgexp"     "cropdmg"        "cropdmgexp"     "year"          
-##  [9] "evtype_cleaned" "propdmgest"     "cropdmgest"     "dmgest"
-```
-
-```r
-summary(stormdata)
-```
-
-```
-##     evtype            fatalities          injuries        
-##  Length:902297      Min.   :  0.0000   Min.   :   0.0000  
-##  Class :character   1st Qu.:  0.0000   1st Qu.:   0.0000  
-##  Mode  :character   Median :  0.0000   Median :   0.0000  
-##                     Mean   :  0.0168   Mean   :   0.1557  
-##                     3rd Qu.:  0.0000   3rd Qu.:   0.0000  
-##                     Max.   :583.0000   Max.   :1700.0000  
-##     propdmg         propdmgexp           cropdmg         cropdmgexp       
-##  Min.   :   0.00   Length:902297      Min.   :  0.000   Length:902297     
-##  1st Qu.:   0.00   Class :character   1st Qu.:  0.000   Class :character  
-##  Median :   0.00   Mode  :character   Median :  0.000   Mode  :character  
-##  Mean   :  12.06                      Mean   :  1.527                     
-##  3rd Qu.:   0.50                      3rd Qu.:  0.000                     
-##  Max.   :5000.00                      Max.   :990.000                     
-##       year      evtype_cleaned       propdmgest         cropdmgest     
-##  Min.   :1950   Length:902297      Min.   :0.00e+00   Min.   :0.0e+00  
-##  1st Qu.:1995   Class :character   1st Qu.:0.00e+00   1st Qu.:0.0e+00  
-##  Median :2002   Mode  :character   Median :0.00e+00   Median :0.0e+00  
-##  Mean   :1999                      Mean   :4.70e-01   Mean   :5.4e-02  
-##  3rd Qu.:2007                      3rd Qu.:0.00e+00   3rd Qu.:0.0e+00  
-##  Max.   :2011                      Max.   :1.15e+05   Max.   :5.0e+03  
-##      dmgest        
-##  Min.   :0.00e+00  
-##  1st Qu.:0.00e+00  
-##  Median :0.00e+00  
-##  Mean   :5.30e-01  
-##  3rd Qu.:0.00e+00  
-##  Max.   :1.15e+05
-```
-
-```r
-stormdata.common <- stormdata %>% count(evtype_cleaned)
-stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
-```
-
-```
-## Source: local data frame [460 x 2]
-## 
-##            evtype_cleaned      n
-##                     (chr)  (int)
-## 1  thunderstorm/lightning 352566
-## 2                    hail 289282
-## 3   flood (several types)  82731
-## 4                 tornado  60652
-## 5               high wind  21764
-## 6              heavy snow  15708
-## 7              heavy rain  11742
-## 8            winter storm  11436
-## 9          winter weather   8155
-## 10           funnel cloud   6845
-## ..                    ...    ...
-```
-
-```r
-# sum fatalities by event type and sort to show events with most fatalities
-stormdata.fatal <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatalities = sum(fatalities))
-stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
-```
-
-```
-## Source: local data frame [460 x 2]
-## 
-##            evtype_cleaned fatalities
-##                     (chr)      (dbl)
-## 1                 tornado       5633
-## 2    heat (several types)       3138
-## 3  thunderstorm/lightning       1571
-## 4   flood (several types)       1525
-## 5             rip current        572
-## 6    cold (several types)        451
-## 7               high wind        283
-## 8               avalanche        224
-## 9            winter storm        216
-## 10             heavy snow        127
-## ..                    ...        ...
-```
-
-```r
-# sum fatalities by event type and sort to show events with most fatalities
-stormdata.injur <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries))
-stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
-```
-
-```
-## Source: local data frame [460 x 2]
-## 
-##            evtype_cleaned injuries
-##                     (chr)    (dbl)
-## 1                 tornado    91346
-## 2  thunderstorm/lightning    14775
-## 3    heat (several types)     9224
-## 4   flood (several types)     8604
-## 5               ice storm     1975
-## 6               high wind     1440
-## 7                    hail     1371
-## 8            winter storm     1338
-## 9       hurricane typhoon     1275
-## 10               wildfire     1061
-## ..                    ...      ...
-```
-
-```r
-summary(stormdata$propdmg)
-```
-
-```
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    0.00    0.00    0.00   12.06    0.50 5000.00
-```
-
-```r
-summary(stormdata$cropdmg)
-```
-
-```
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##   0.000   0.000   0.000   1.527   0.000 990.000
-```
-
-```r
-summary(stormdata$propdmgexp)
-```
-
-```
-##    Length     Class      Mode 
-##    902297 character character
-```
-
-```r
-summary(stormdata$cropdmgexp)
-```
-
-```
-##    Length     Class      Mode 
-##    902297 character character
+rm(i,prop_ind,crop_ind,alphabetic,magnitude)
 ```
 
 ## Results
-### Most harmful events 
-The data conatins information on the number of fatalitites and injuries from the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types gor the full data and restricted to the last year in the data. The rational behind restricting the data to the last year is to better see which types of weather are problematic at the moment, and where efforts to prevent harm should be directed. 
+### Events causing population harm 
+The data contains information on the number of fatalitites and injuries caused by the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types for the full data as well as restricted to the last year in the data. The rationale behind restricting the data to the last year is to better see which types of weather are problematic at the moment, and where efforts to prevent harm should be directed. 
 
 
 ```r
@@ -291,42 +139,211 @@ grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
 
 ![](RR2_template_files/figure-html/identify_harm-1.png) 
 
+These graphs show the 10 events with the largest number of fatalities or injuries for the full data and when restricting the data to 2011. From the graphs we can see that tornados cause the largest number of injuries and also a large number of fatalities. The biggest cause of fatalitites for data from 2000-2011 is excessive heat which causes a slightly larger number of deaths. Other large causes of fatalitites and injuries are floods, excessive heat, and rip currents.   
+
+It can be noted that there is a large number of injuries and fatalites form tornados in 2011. Some [wikipedia reserach](https://en.wikipedia.org/wiki/April_25%E2%80%9328,_2011_tornado_outbreak) shows that this is due to an exceptionally large number of tornado outbreaks in the US in 2011
+
 ### Events with greatest economic consequences 
+
+I have summed the damage to properties and the damage to crops to get the total amount of economic damage. The distribution of total economic damage by event is shown in the plots below. 
 
 
 ```r
 # sum economic damage by event type and sort to show events with greatest economic consequences 
-rank.prop    <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(propdmgest = sum(propdmgest)) %>% top_n(10, propdmgest)
-rank.recentprop <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(propdmgest = sum(propdmgest)) %>% top_n(10, propdmgest)
-
-rank.crop <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(cropdmgest = sum(cropdmgest)) %>% top_n(10, cropdmgest)
-rank.recentcrop <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(cropdmgest = sum(cropdmgest)) %>% top_n(10, cropdmgest)
-
 rank.tot <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
 rank.recenttot <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
 
-g1 <- ggplot(data=rank.prop, aes(x=evtype_cleaned, y=propdmgest)) + geomstyle + ggtitle("Property damage by event type")+ylab("Damage in million $")+labeltheme
-g2 <- ggplot(data=rank.recentprop, aes(x=evtype_cleaned, y=propdmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+xlab("")+labeltheme
+g1 <- ggplot(data=rank.tot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Total damage by event type")+ylab("Damage in million $")+labeltheme
+g2 <- ggplot(data=rank.recenttot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
 
-g3 <- ggplot(data=rank.crop, aes(x=evtype_cleaned, y=cropdmgest)) + geomstyle + ggtitle("Crop damage by event type")+ylab("Damage in million $")+labeltheme
-g4 <- ggplot(data=rank.recentcrop, aes(x=evtype_cleaned, y=cropdmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
-
-g5 <- ggplot(data=rank.tot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Total damage by event type")+ylab("Damage in million $")+labeltheme
-g6 <- ggplot(data=rank.recenttot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
-
-grid.arrange(g1, g2, g3, g4, g5, g6, nrow=3, ncol=2)
+grid.arrange(g1, g2, nrow=1, ncol=2)
 ```
 
 ![](RR2_template_files/figure-html/identify_eco-1.png) 
 
 
-Some things to consider: 
-- which event has the largest total number of injuries/fatalities since the start of data collection
-- which has the largest number of fatalities/injuries in a single instance?
-- which has the largest number of injuries/fatalities in 'modern times' 
+From these plots we see that the event causing the largest damage in million dollars is floods followed by hurricane typhoons and tornados. If we only look at 2011 the pattern is different, with tornados being the largest source of economic damage, closely followed by floods. 
 
-Furthermore: Not all events are properly described, some similar events are not grouped together, some are not spelled correctly etc.
+## Discussion and conclusions 
+The results from this analysis indicates that the events causing most damage (both economical and to the population) are tornados, floods and heat spells. Efforts for preventing weather related damage should be focused on these types of events. 
 
-## Discussion of results  
 
+## Appendix; Exploratory analysis 
+Here are some exploratory searches I performed to better understand the data. They are available for reference (and for my own sake), but are not essential in understanding and interpreting the analysis and results. Please fell free to ignore. 
+
+
+```r
+names(stormdata)
+```
+
+```
+##  [1] "evtype"         "fatalities"     "injuries"       "propdmg"       
+##  [5] "propdmgexp"     "cropdmg"        "cropdmgexp"     "year"          
+##  [9] "evtype_cleaned" "propdmgest"     "cropdmgest"     "dmgest"
+```
+
+```r
+summary(stormdata)
+```
+
+```
+##     evtype            fatalities           injuries       
+##  Length:523163      Min.   :  0.00000   Min.   :0.00e+00  
+##  Class :character   1st Qu.:  0.00000   1st Qu.:0.00e+00  
+##  Mode  :character   Median :  0.00000   Median :0.00e+00  
+##                     Mean   :  0.01146   Mean   :6.72e-02  
+##                     3rd Qu.:  0.00000   3rd Qu.:0.00e+00  
+##                     Max.   :158.00000   Max.   :1.15e+03  
+##     propdmg         propdmgexp           cropdmg         cropdmgexp       
+##  Min.   :   0.00   Length:523163      Min.   :  0.000   Length:523163     
+##  1st Qu.:   0.00   Class :character   1st Qu.:  0.000   Class :character  
+##  Median :   0.00   Mode  :character   Median :  0.000   Mode  :character  
+##  Mean   :  11.41                      Mean   :  1.708                     
+##  3rd Qu.:   1.00                      3rd Qu.:  0.000                     
+##  Max.   :5000.00                      Max.   :990.000                     
+##       year      evtype_cleaned       propdmgest         cropdmgest      
+##  Min.   :2000   Length:523163      Min.   :0.00e+00   Min.   :0.00e+00  
+##  1st Qu.:2003   Class :character   1st Qu.:0.00e+00   1st Qu.:0.00e+00  
+##  Median :2006   Mode  :character   Median :0.00e+00   Median :0.00e+00  
+##  Mean   :2006                      Mean   :6.30e-01   Mean   :4.51e-02  
+##  3rd Qu.:2009                      3rd Qu.:0.00e+00   3rd Qu.:0.00e+00  
+##  Max.   :2011                      Max.   :1.15e+05   Max.   :1.51e+03  
+##      dmgest        
+##  Min.   :0.00e+00  
+##  1st Qu.:0.00e+00  
+##  Median :0.00e+00  
+##  Mean   :6.80e-01  
+##  3rd Qu.:0.00e+00  
+##  Max.   :1.15e+05
+```
+
+```r
+# which events are most common?
+stormdata.common <- stormdata %>% count(evtype_cleaned)
+stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
+```
+
+```
+## Source: local data frame [145 x 2]
+## 
+##            evtype_cleaned      n
+##                     (chr)  (int)
+## 1  thunderstorm/lightning 188546
+## 2                    hail 166200
+## 3   flood (several types)  61192
+## 4                 tornado  17687
+## 5               high wind  16411
+## 6              heavy snow  10901
+## 7            winter storm   9774
+## 8              heavy rain   9664
+## 9          winter weather   8040
+## 10           funnel cloud   4637
+## ..                    ...    ...
+```
+
+```r
+# sum fatalities by event type and sort to show events with most fatalities
+stormdata.fatal <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatalities = sum(fatalities))
+stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
+```
+
+```
+## Source: local data frame [145 x 2]
+## 
+##            evtype_cleaned fatalities
+##                     (chr)      (dbl)
+## 1    heat (several types)       1244
+## 2                 tornado       1193
+## 3   flood (several types)        870
+## 4  thunderstorm/lightning        735
+## 5             rip current        462
+## 6    cold (several types)        259
+## 7               avalanche        179
+## 8               high wind        131
+## 9            winter storm        104
+## 10            strong wind        100
+## ..                    ...        ...
+```
+
+```r
+# sum fatalities by event type and sort to show events with most fatalities
+stormdata.injur <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries))
+stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
+```
+
+```
+## Source: local data frame [145 x 2]
+## 
+##            evtype_cleaned injuries
+##                     (chr)    (dbl)
+## 1                 tornado    15213
+## 2  thunderstorm/lightning     6218
+## 3    heat (several types)     4930
+## 4       hurricane typhoon     1275
+## 5   flood (several types)     1129
+## 6                wildfire      911
+## 7               high wind      677
+## 8                    hail      545
+## 9          winter weather      483
+## 10           winter storm      436
+## ..                    ...      ...
+```
+
+```r
+# properties of the property and crop damage columns
+summary(stormdata$propdmg)
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##    0.00    0.00    0.00   11.41    1.00 5000.00
+```
+
+```r
+summary(stormdata$cropdmg)
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   0.000   0.000   0.000   1.708   0.000 990.000
+```
+
+```r
+summary(stormdata$propdmgexp)
+```
+
+```
+##    Length     Class      Mode 
+##    523163 character character
+```
+
+```r
+summary(stormdata$cropdmgexp)
+```
+
+```
+##    Length     Class      Mode 
+##    523163 character character
+```
+
+```r
+# economic damage from tornados over time
+tornado <- stormdata %>% na.omit() %>% filter(evtype_cleaned=="tornado") %>% group_by(year, evtype_cleaned) %>% summarize(dmgest = sum(dmgest))%>% top_n(10, dmgest)
+```
+
+Some plots for which output is hidden to not exceed the limit of three plots
+
+
+```r
+# How many records per year do we have?
+# Reporting seem to be taking of by 1995
+plot(stormdata.full %>% count(year), pch=19)+abline(v=1995)
+
+# no records of crop or prop damage before 95
+plot(stormdata.full %>% group_by(year) %>%  summarise(dmg = sum(cropdmg)))
+plot(stormdata.full %>% group_by(year) %>%  summarise(dmg = sum(propdmg)))
+
+plot(stormdata.full %>% group_by(year) %>%  summarise(dmg = sum(fatalities)))
+plot(stormdata.full %>% group_by(year) %>%  summarise(dmg = sum(injuries)))
+```
 
