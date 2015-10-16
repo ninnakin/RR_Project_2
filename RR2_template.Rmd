@@ -21,8 +21,17 @@ download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.
 stormdata.full<- read.csv(bzfile("stormdata.csv.bz2"), header = TRUE, na.strings = "")
 ```
 
-To make the data easier to work with column names have been transformed to lower case and only the columns of the data concerning damage caused by weather are kept. I am also adding the column year to see which events are causing more damage during recent years. 
-```{r processdata, eval=FALSE}
+The data is processed in the following steps:
+- Column names have been transformed to lower case 
+- Only the columns of the data concerning damage caused by weather, i.e. the ones needed for this analysis, are kept
+- The column *year* is added
+- A new column called *evtype_cleaned* is created, this contains the information from *evtype* modified in the following way:
+    - All event names are transformed to lower case and special characters and leading and trailing spaces are removed
+    - Some common variations and abbrevations for events are replaced with a standard event name, e.g. "TSTM"" is replaced by "thunderstorm"
+    - Similar events are grouped together, e.g. all event contained the word "flood" are mapped to the event type "floods (several types)" 
+- New columns with the calculated value of crop damagae, property damage and total economic (crop and property combined) are added
+
+```{r processdata, results='hold', echo=TRUE, warning=FALSE}
 library(dplyr)
 library(lubridate)
 names(stormdata.full)<-tolower(names(stormdata.full))
@@ -31,62 +40,66 @@ stormdata$year <- year(as.Date(stormdata.full$bgn_date,"%m/%d/%Y"))
 rm(stormdata.full)
 ```
 
-## Exploratory analysis
 
-Which events are included in the data?
-```{r exploratory1, echo=TRUE}
-names(stormdata)
-
-summary(stormdata)
-
-# order alphabetically to find similar terms coded differently
-unique(stormdata$evtype)
-
-stormdata$evtype<-tolower(stormdata$evtype)
-
+```{r process_eventtype, results='hold', echo=TRUE}
 # remove special characters and trailing/leading spaces 
+stormdata$evtype<-tolower(stormdata$evtype)
 stormdata$evtype_cleaned<- gsub("[0-9]*[\\.\\(\\)]*","", stormdata$evtype)
 stormdata$evtype_cleaned<- gsub("[-/:]"," ", stormdata$evtype_cleaned)
 stormdata$evtype_cleaned<- gsub("^[ ]","",  stormdata$evtype_cleaned)
 stormdata$evtype_cleaned<- sub("[ ]$", "", stormdata$evtype_cleaned)
 
-# Gather all event types containing the word "summary"
-# Replace the abbreviation TSTM with "Thunderstorm"
+# Replace the abbreviations and variations of event name with standard name
 replace <- c("tstm", "winds", "storms", "flooding", "currents", "fires")
 with    <- c("thunderstorm", "wind", "storm", "flood", "current", "fire")
 
 for(i in seq_along(replace)){
-    stormdata$evtype_cleaned<-gsub(replace[i], with[i], stormdata$evtype_cleaned)
+    stormdata$evtype_cleaned<-gsub(replace[i], with[i], stormdata$evtype_cleaned, ignore.case = TRUE)
 }
+rm(i, replace, with)
 
 # Rename events containing certain patterns 
 pattern <- c("summary", "flood", "tide", "thunderstorm", "heat", "cold", "chill", "wild fire", "thunderstorm", "lightning", "winter weather", "hail")
 newname <- c("summary", "flood (several types)", "tide (several types)", "thunderstorm", "heat (several types)", "cold (several types)", "wind chill", "wildfire", "thunderstorm/lightning", "thunderstorm/lightning", "winter weather", "hail")
 
-for(i in seq_along(pattern){
+for(i in seq_along(pattern)){
     stormdata$evtype_cleaned[grep(pattern[i],stormdata$evtype_cleaned,ignore.case = TRUE)]<-newname[i]
 }
+rm(i, pattern, newname)
+```
 
-# rename
-stormdata$evtype_cleaned[grep("summary",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"summary"
-stormdata$evtype_cleaned[grep("flood",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"flood (several types)"
-stormdata$evtype_cleaned[grep("tide",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"tide (several types)"
-stormdata$evtype_cleaned[grep("thunderstorm",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm"
-stormdata$evtype_cleaned[grep("heat",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"heat (several types)"
-stormdata$evtype_cleaned[grep("cold",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"cold (several types)"
-stormdata$evtype_cleaned[grep("wind chill",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wind chill"
-stormdata$evtype_cleaned[grep("windchill",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wind chill"
-stormdata$evtype_cleaned[grep("wild fire",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"wildfire"
-stormdata$evtype_cleaned[grep("thunderstorm",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm/lightning"
-stormdata$evtype_cleaned[grep("lightning",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"thunderstorm/lightning"
-stormdata$evtype_cleaned[grep("winter weather",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"winter weather"
-stormdata$evtype_cleaned[grep("hail",stormdata$evtype_cleaned,ignore.case = TRUE)]<-"hail"
+```{r process_ecodamage, results='hold', echo=TRUE}
+# Assign a numeric value to the crop and property damage by translating the alphabetical magnuítudes to numeric values 
+# Economic damage will be stored in million dollars
+stormdata$propdmgexp<-tolower(stormdata$propdmgexp)
+stormdata$cropdmgexp<-tolower(stormdata$cropdmgexp)
 
-# Replace "winds" with "wind"
+alphabetic <- c("k", "m", "b")
+magnitude  <- c(0.001,1,1000)
+stormdata$propdmgest <- 0;
+stormdata$cropdmgest <- 0;
+
+for(i in seq_along(alphabetic)){
+    prop_ind <- which(stormdata$propdmgexp==alphabetic[i] & !is.na(stormdata$propdmg))
+    stormdata$propdmgest[prop_ind] <-  magnitude[i]*stormdata$propdmg[prop_ind]
+    
+    crop_ind <- which(stormdata$cropdmgexp==alphabetic[i] & !is.na(stormdata$cropdmg))
+    stormdata$cropdmgest[crop_ind] <-  magnitude[i]*stormdata$cropdmg[crop_ind]
+}
+rm(i,prop_ind,crop_ind,alphabetic,magnitude)
+
+stormdata$dmgest <- stormdata$cropdmgest+stormdata$propdmgest
+```
+
+## Exploratory analysis
+
+Which events are included in the data?
+```{r exploratory1, echo=TRUE}
+names(stormdata)
+summary(stormdata)
 
 stormdata.common <- stormdata %>% count(evtype_cleaned)
 stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
-
 
 # sum fatalities by event type and sort to show events with most fatalities
 stormdata.fatal <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatalities = sum(fatalities))
@@ -96,19 +109,73 @@ stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
 stormdata.injur <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries))
 stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
 
+summary(stormdata$propdmg)
+summary(stormdata$cropdmg)
+
+summary(stormdata$propdmgexp)
+summary(stormdata$cropdmgexp)
 ```
+
+## Results
+### Most harmful events 
+The data conatins information on the number of fatalitites and injuries from the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types gor the full data and restricted to the last year in the data. The rational behind restricting the data to the last year is to better see which types of weather are problematic at the moment, and where efforts to prevent harm should be directed. 
+
+```{r identify_harm, echo=TRUE, fig.height=8}
+library(ggplot2)
+library(gridExtra)
+
+# sum fatalities and injuries by event type and sort to show events with most fatalities/injuries
+rank.fatal    <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatal = sum(fatalities)) %>% top_n(10, fatal)
+rank.recentfatal <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_fatal = sum(fatalities)) %>% top_n(10, rec_fatal)
+rank.injuries <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries)) %>% top_n(10, injuries)
+rank.recentinjuries <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_injuries = sum(injuries)) %>% top_n(10, rec_injuries)
+
+labeltheme <- theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title.x = element_blank())
+geomstyle  <- geom_bar(stat="identity", fill="steelblue", col="darkblue")
+
+g1 <- ggplot(data=rank.fatal, aes(x=evtype_cleaned, y=fatal)) + geomstyle + ggtitle("10 events causing most fatalities")+labeltheme
+g2 <- ggplot(data=rank.recentfatal, aes(x=evtype_cleaned, y=rec_fatal)) + geomstyle + ggtitle("Restricted to 2011 data")+labeltheme
+
+g3 <- ggplot(data=rank.injuries, aes(x=evtype_cleaned, y=injuries)) + geomstyle + ggtitle("10 events causing most injuries")+labeltheme
+g4 <- ggplot(data=rank.recentinjuries, aes(x=evtype_cleaned, y=rec_injuries)) + geomstyle + ggtitle("Restricted to 2011 data")+labeltheme
+
+grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
+```
+
+### Events with greatest economic consequences 
+
+```{r identify_eco, echo=TRUE, fig.height=12}
+
+# sum economic damage by event type and sort to show events with greatest economic consequences 
+rank.prop    <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(propdmgest = sum(propdmgest)) %>% top_n(10, propdmgest)
+rank.recentprop <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(propdmgest = sum(propdmgest)) %>% top_n(10, propdmgest)
+
+rank.crop <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(cropdmgest = sum(cropdmgest)) %>% top_n(10, cropdmgest)
+rank.recentcrop <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(cropdmgest = sum(cropdmgest)) %>% top_n(10, cropdmgest)
+
+rank.tot <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
+rank.recenttot <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
+
+g1 <- ggplot(data=rank.prop, aes(x=evtype_cleaned, y=propdmgest)) + geomstyle + ggtitle("Property damage by event type")+ylab("Damage in million $")+labeltheme
+g2 <- ggplot(data=rank.recentprop, aes(x=evtype_cleaned, y=propdmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+xlab("")+labeltheme
+
+g3 <- ggplot(data=rank.crop, aes(x=evtype_cleaned, y=cropdmgest)) + geomstyle + ggtitle("Crop damage by event type")+ylab("Damage in million $")+labeltheme
+g4 <- ggplot(data=rank.recentcrop, aes(x=evtype_cleaned, y=cropdmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
+
+g5 <- ggplot(data=rank.tot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Total damage by event type")+ylab("Damage in million $")+labeltheme
+g6 <- ggplot(data=rank.recenttot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
+
+grid.arrange(g1, g2, g3, g4, g5, g6, nrow=3, ncol=2)
+```
+
 
 Some things to consider: 
 - which event has the largest total number of injuries/fatalities since the start of data collection
 - which has the largest number of fatalities/injuries in a single instance?
 - which has the largest number of injuries/fatalities in 'modern times' 
 
-Furthermore: Not all events are properöy described, some similar events are not grouped together, some are not spelled correctly etc.
+Furthermore: Not all events are properly described, some similar events are not grouped together, some are not spelled correctly etc.
 
-## Results
-
-
-
-
+## Discussion of results  
 
 
