@@ -4,7 +4,7 @@ output:
   html_document:
     keep_md: true
 ---
-#  Damage to poulation and economy from weather in the United States 
+#  Damage to population and economy from weather in the United States 
 
 ## Synopsis
 I have used the Storm Data dataset provided by the National Weather Service to analyse which weather events are most harmful. The analysis looks at two aspectes of damage; damage to population health and economic damage. This analysis looks at damage from weather from year 2000-2011, identifying the events causing the largest numbers of fatalities and injuries as well as the events leading to the largest costs from property and crop damage. 
@@ -44,6 +44,7 @@ The data is processed in the following steps:
 ```{r processdata, results='hold', echo=TRUE, warning=FALSE}
 library(dplyr)
 library(lubridate)
+library(knitr)
 names(stormdata.full)<-tolower(names(stormdata.full))
 stormdata.full$year <- year(as.Date(stormdata.full$bgn_date,"%m/%d/%Y"))
 stormdata <- select(stormdata.full, evtype, fatalities, injuries, propdmg, propdmgexp, cropdmg, cropdmgexp, year)
@@ -68,7 +69,6 @@ events<-gsub("[-/:]"," ", events)
 events<-gsub( " *\\(.*?\\) *", "", events)
 events<-gsub("[ ]$","",  events)
 events<-gsub("^[ ]","",  events)
-
 
 # Replace the abbreviations and variations of event name with standard name
 replace <- c("tstm", "winds", "storms", "flooding", "currents", "fires", "fld","wild fire", "hot", "snowfall", "warm","cool","wnd","windchill","storm surge","dry","landslide","precipitation","wintry mix")
@@ -121,7 +121,6 @@ for(i in seq_along(event_orgnames)){
     }
     else stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- "other"
 }
-
 ```
 
 Processing the values for the cost for crop and property damage: 
@@ -151,29 +150,32 @@ rm(i,prop_ind,crop_ind,alphabetic,magnitude)
 ### Events causing population harm 
 The data contains information on the number of fatalitites and injuries caused by the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types for the full data as well as restricted to the last year in the data. The rationale behind restricting the data to the last year is to better see which types of weather are problematic at the time of data collection, and where efforts to prevent harm should be directed in order to be most efficient.  
 
-```{r identify_harm, echo=TRUE, fig.height=8}
+```{r identify_harm, echo=TRUE, fig.height=4, fig.cap="Figure 1", fig.cap="Figure 2"}
 library(ggplot2)
 library(gridExtra)
 
 # sum fatalities and injuries by event type and sort to show events with most fatalities/injuries
-rank.fatal    <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatal = sum(fatalities)) %>% top_n(10, fatal)
-rank.recentfatal <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_fatal = sum(fatalities)) %>% top_n(10, rec_fatal)
-rank.injuries <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries)) %>% top_n(10, injuries)
-rank.recentinjuries <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_injuries = sum(injuries)) %>% top_n(10, rec_injuries)
+fatal    <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatal = sum(fatalities)) %>% top_n(10, fatal)
+recentfatal <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_fatal = sum(fatalities)) %>% top_n(10, rec_fatal)
+recentfatal <- recentfatal[order(recentfatal$rec_fatal, decreasing=TRUE),]
+injuries <- stormdata %>% group_by(evtype_cleaned) %>% summarize(injuries = sum(injuries)) %>% top_n(10, injuries)
+recentinjuries <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_injuries = sum(injuries)) %>% top_n(10, rec_injuries)
+recentinjuries <- recentinjuries[order(recentinjuries$rec_injuries, decreasing=TRUE),]
 
 labeltheme <- theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.title.x = element_blank())
 geomstyle  <- geom_bar(stat="identity", fill="steelblue", col="darkblue")
 
-g1 <- ggplot(data=rank.fatal, aes(x=evtype_cleaned, y=fatal)) + geomstyle + ggtitle("10 events causing most fatalities")+labeltheme
-g2 <- ggplot(data=rank.recentfatal, aes(x=evtype_cleaned, y=rec_fatal)) + geomstyle + ggtitle("Restricted to 2011 data")+labeltheme
+g1 <- ggplot(data=fatal, aes(x=evtype_cleaned, y=fatal)) + geomstyle + ggtitle("10 events causing most fatalities")+labeltheme+ylab("Fatalities")
+g2 <- ggplot(data=injuries, aes(x=evtype_cleaned, y=injuries)) + geomstyle + ggtitle("10 events causing most injuries")+labeltheme+ylab("Injuries")
+grid.arrange(g1, g2, nrow=1, ncol=2)
 
-g3 <- ggplot(data=rank.injuries, aes(x=evtype_cleaned, y=injuries)) + geomstyle + ggtitle("10 events causing most injuries")+labeltheme
-g4 <- ggplot(data=rank.recentinjuries, aes(x=evtype_cleaned, y=rec_injuries)) + geomstyle + ggtitle("Restricted to 2011 data")+labeltheme
-
-grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
+kable(recentfatal, digits=0, col.names = c("Event","Fatalities"),
+      caption = "Table 1: Events causing most fatalities in 2011")
+kable(recentinjuries, digits=0, col.names = c("Event","Injuries"),
+      caption = "Table 2: Events causing most injuries in 2011")
 ```
 
-These graphs show the 10 events with the largest number of fatalities or injuries for the full data and when restricting the data to 2011. From the graphs we can see that tornados cause the largest number of injuries and also a large number of fatalities. The second biggest cause of fatalitites for data from 2000-2011 is excessive heat which causes a slightly smaller number of deaths. Other large causes of fatalitites and injuries are floods, thunderstorms, lightning, and rip currents.   
+These graphs show the 10 events with the largest number of fatalities or injuries for the full data. Tables 1 and 2 show the same information when restricting the data to 2011. From the graphs we can see that tornados cause the largest number of injuries and also a large number of fatalities. The second biggest cause of fatalitites for data from 2000-2011 is excessive heat which causes a slightly smaller number of deaths. Other large causes of fatalitites and injuries are floods, thunderstorms, lightning, and rip currents.   
 
 It can be noted that there is a large number of injuries and fatalites form tornados in 2011. Some [wikipedia reserach](https://en.wikipedia.org/wiki/April_25%E2%80%9328,_2011_tornado_outbreak) shows that this is due to an exceptionally large number of tornado outbreaks in the US in 2011. 
 
@@ -181,19 +183,20 @@ It can be noted that there is a large number of injuries and fatalites form torn
 
 I have summed the damage to properties and the damage to crops to get the total amount of economic damage. The distribution of total economic damage by event is shown in the plots below. 
 
-```{r identify_eco, echo=TRUE, fig.height=4}
-
+```{r identify_eco, echo=TRUE, fig.height=4 ,fig.width=4, fig.align="center", fig.cap="Figure 3"}
 # sum economic damage by event type and sort to show events with greatest economic consequences 
-rank.tot <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
-rank.recenttot <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
+dmg <- stormdata %>% na.omit() %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
+dmg <- dmg[order(dmg$dmgest, decreasing=TRUE),]
+recentdmg <- stormdata %>% na.omit() %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(dmgest = sum(dmgest)) %>% top_n(10, dmgest)
+recentdmg <- recentdmg[order(recentdmg$dmgest, decreasing=TRUE),]
+  
+ggplot(data=dmg, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Total damage by event type")+ylab("Damage in million $")+labeltheme
 
-g1 <- ggplot(data=rank.tot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Total damage by event type")+ylab("Damage in million $")+labeltheme
-g2 <- ggplot(data=rank.recenttot, aes(x=evtype_cleaned, y=dmgest)) + geomstyle + ggtitle("Restricted to 2011 data")+ylab("")+labeltheme
-
-grid.arrange(g1, g2, nrow=1, ncol=2)
+kable(recentdmg, digits=0, col.names = c("Event","Estimated damage (million $)"),
+      caption = "Table 6: Events causing largest economic damage in 2011")
 ```
 
-From these plots we see that the event causing the largest damage in million dollars is floods followed by hurricane typhoons and tornados. If we only look at 2011 the pattern is different, with tornados being the largest source of economic damage, closely followed by floods. 
+From the plots and table 3 we see that the event causing the largest damage in million dollars is floods followed by hurricane typhoons and tornados. If we only look at the 2011 data in the table the pattern is different, with tornados being the largest source of economic damage, closely followed by floods. 
 
 ## Discussion and conclusions 
 The results from this analysis indicates that the events causing most damage (both economical and to the population) are tornados, floods and heat spells. Efforts for preventing weather related damage should be focused on these types of events. 
