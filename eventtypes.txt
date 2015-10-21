@@ -1,0 +1,48 @@
+7 1 Astronomical Low Tide (Z) 18
+7 2 Avalanche (Z) 19
+7 3 Blizzard (Z) 20
+7 4 Coastal Flood (Z) 21
+7 5 Cold/Wind Chill (Z) 22
+7 6 Debris Flow (C) 23
+7 7 Dense Fog (Z) 24
+7 8 Dense Smoke (Z) 24
+7 9 Drought (Z) 25
+7 10 Dust Devil (C) 26
+7 11 Dust Storm (Z) 27
+7 12 Excessive Heat (Z) 28
+7 13 Extreme Cold/Wind Chill (Z) 30
+7 14 Flash Flood (C) 32
+7 15 Flood (C) 37
+7 16 Freezing Fog (Z) 39
+7 17 Frost/Freeze (Z) 39
+7 18 Funnel Cloud (C) 40
+7 19 Hail (C) 41
+7 20 Heat (Z) 43
+7 21 Heavy Rain (C) 44
+7 22 Heavy Snow (Z) 45
+7 23 High Surf (Z) 46
+7 24 High Wind (Z) 47
+7 25 Hurricane/Typhoon (Z) 48
+7 26 Ice Storm (Z) 56
+7 27 Lakeshore Flood (Z) 57
+7 28 Lake-Effect Snow (Z) 57
+7 29 Lightning (C) 59
+7 30 Marine Hail (M) 60
+7 31 Marine High Wind (M) 61
+7 32 Marine Strong Wind (M) 63
+7 33 Marine Thunderstorm Wind (M) 64
+7 34 Rip Current (Z) 65
+7 35 Seiche (Z) 66
+7 36 Sleet (Z) 67
+7 37 Storm Tide (Z) 68
+7 38 Strong Wind (Z) 69
+7 39 Thunderstorm Wind (C) 70
+7 40 Tornado (C) 74
+7 41 Tropical Depression (Z) 85
+7 42 Tropical Storm (Z) 86
+7 43 Tsunami (Z) 87
+7 44 Volcanic Ash (Z) 88
+7 45 Waterspout (M) 89
+7 46 Wildfire (Z) 90
+7 47 Winter Storm (Z) 91
+7 48 Winter Weather (Z) 92
