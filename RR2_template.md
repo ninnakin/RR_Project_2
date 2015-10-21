@@ -22,13 +22,17 @@ The data is processed in the following steps:
 1. Column names have been transformed to lower case 
 2. Only the columns of the data concerning damage caused by weather, i.e. the ones needed for this analysis, are kept
 3. The column *year* is added
-4. A new column called *evtype_cleaned* is created, this contains the information from *evtype* modified in the following ways:
-    + All event names are transformed to lower case and special characters and leading and trailing spaces are removed
+4. A new column called *evtype_cleaned* is created, this is based on the information from *evtype*,and interprets each reported event as one of the 48 event types listed in section 7 of the storm data documentation. To achieve this, the event types are modified in the following ways:
+    + All event names are transformed to lower case and numbers, special characters and leading and trailing spaces are removed
     + Some common variations and abbrevations for events are replaced with a standard event name, e.g. "TSTM"" is replaced by "thunderstorm"
-    + Similar events are grouped together, e.g. all event contained the word "flood" are mapped to the event type "floods (several types)" 
+    + Words that do not contain a weather event, but rather a description or conjunction such as "and" and "severe" are excluded
+    + The event definition from the documentation are read and stored in the vector *events* and the cleaned event types are compared to this vector using the function adist and partial matching. 
+      + When there is a close enough match, the event name will be replaced by the corresponding entry from *events*.       + If no appropriate match can be found, the event is renamed to "other".
+      + If there are multiple matches the one with most matching words will be chosen.
+      + If there are still multiple matching, the one with the smallest number of mismatched words will be chosen. 
 5. New columns with the calculated value of crop damage, property damage and total economic damage (crop and property damages combined) are added and stored in the columns *propdmgest*, *cropdmgest*, and *dmgest*.
 6. The data is limited to data reported during year 2000 or later. The reason for this is twofold: 
-    + Firstly, Events that took place more than ten years ago (relative to the last date of the dataset) is not relevant for assessing how to prevent damage from events that happened today. The measures we take to prevent damage from weather events have changed (and hopefully improved) greatly since the 1950s
+    + Firstly, Events that took place more than ten years ago (relative to the last date of the dataset) is not relevant for assessing how to prevent damage from events that happened today. The measures we take to prevent damage from weather events have changed (and hopefully improved) greatly since the 1950s. For example, we build houses differently now than we did before, and our strategies for handling extreme weather and catastrophes have been updated. So, a large number of fatalities for a specific event in 1950 might not be at all relevant for precenting fatalities today.   
     + We do not have as much data from the early years of the dataset as we have for the later years (see exploratory analysis), for example, the first reports of economic damage are from 1995. 
 
 
@@ -57,7 +61,7 @@ stormdata <- select(stormdata.full, evtype, fatalities, injuries, propdmg, propd
 stormdata <- filter(stormdata, year>=2000)
 ```
 
-Processing of the event type:
+Processing of the event types:
 
 ```r
 # remove special characters and trailing/leading spaces 
@@ -67,23 +71,77 @@ stormdata$evtype_cleaned<- gsub("[-/:]"," ", stormdata$evtype_cleaned)
 stormdata$evtype_cleaned<- gsub("^[ ]","",  stormdata$evtype_cleaned)
 stormdata$evtype_cleaned<- sub("[ ]$", "", stormdata$evtype_cleaned)
 
+# I copied the 48 event types from the content list of the documentation
+# read them from txt file in work directory
+events<-read.csv("eventtypes.txt", header = FALSE, stringsAsFactors = FALSE)
+events<-sapply(events, tolower)
+events<-gsub("[0-9]*","", events)
+events<-gsub("[-/:]"," ", events)
+events<-gsub( " *\\(.*?\\) *", "", events)
+events<-gsub("[ ]$","",  events)
+events<-gsub("^[ ]","",  events)
+
+
 # Replace the abbreviations and variations of event name with standard name
-replace <- c("tstm", "winds", "storms", "flooding", "currents", "fires")
-with    <- c("thunderstorm", "wind", "storm", "flood", "current", "fire")
+replace <- c("tstm", "winds", "storms", "flooding", "currents", "fires", "fld","wild fire", "hot", "snowfall", "warm","cool","wnd","windchill","storm surge","dry","landslide","precipitation","wintry mix")
+with    <- c("thunderstorm", "wind", "storm", "flood", "current", "fire", "flood", "wildfire", "heat","snow","heat","cold","wind","wind chill","coastal flood","drought","debris flow","rain","winter weather")
 
 for(i in seq_along(replace)){
     stormdata$evtype_cleaned<-gsub(replace[i], with[i], stormdata$evtype_cleaned, ignore.case = TRUE)
 }
 rm(i, replace, with)
 
-# Rename events containing certain patterns 
-pattern <- c("summary", "flood", "tide", "thunderstorm", "heat", "cold", "chill", "wild fire", "thunderstorm", "lightning", "winter weather", "hail")
-newname <- c("summary", "flood (several types)", "tide (several types)", "thunderstorm", "heat (several types)", "cold (several types)", "wind chill", "wildfire", "thunderstorm/lightning", "thunderstorm/lightning", "winter weather", "hail")
+# Remove words that do not contains information about the event we want to map
+remove <- c("unseasonably","light ","and ","temperatures", "advisories","gusty","conditions", "prolong","very ", "unusually","extremely","abnormally","unseasonal","severe","record","advisory","hard ")
+for(i in seq_along(remove)){
+    stormdata$evtype_cleaned<-gsub(remove[i], "", stormdata$evtype_cleaned, ignore.case = TRUE)
+}
+rm(i, remove)
+
+#Rename events containing certain patterns 
+pattern <- c("summary")
+newname <- c("summary")
 
 for(i in seq_along(pattern)){
-    stormdata$evtype_cleaned[grep(pattern[i],stormdata$evtype_cleaned,ignore.case = TRUE)]<-newname[i]
+   stormdata$evtype_cleaned[grep(pattern[i],stormdata$evtype_cleaned,ignore.case = TRUE)]<-newname[i]
 }
 rm(i, pattern, newname)
+
+# storunique event names from stormdata and extract thjose that don't have an exact match in events
+event_orgnames <- unique(stormdata$evtype_cleaned)
+event_orgnames <- event_orgnames[!event_orgnames %in% events]
+
+# map these event names to their closest match
+for(i in seq_along(event_orgnames)){
+    d1 <- adist(event_orgnames[i],events, partial = TRUE)
+    d2 <- t(adist(events, event_orgnames[i], partial = TRUE))
+    d <- apply(rbind(d1,d2), MARGIN=2,FUN=min)
+    
+    # allowed distance depends on length of string
+    reldist <- 1.0*min(d)/nchar(event_orgnames[i])
+    # identified matches
+    pot.matches <-events[which(d==min(d))]
+  
+    if(reldist<=0.2){
+      if(length(pot.matches)==1)  
+        stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- pot.matches
+      else if (length(pot.matches)>1){
+        a_split <- unlist(strsplit(event_orgnames[i], split=" ", fixed=TRUE))
+        b_split <- strsplit(pot.matches, split=" ", fixed=TRUE)
+        commonwords <- sapply(b_split, FUN = function(x) length(intersect(unlist(x),a_split)))
+        diffwords <- sapply(b_split, FUN = function(x) length(setdiff(unlist(x),a_split)))
+        
+        if(sum(commonwords==max(commonwords))==1){
+          stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- pot.matches[commonwords==max(commonwords)]
+        }
+        else if (sum(diffwords==min(diffwords))==1){
+          stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- pot.matches[diffwords==min(diffwords)]
+        }
+        else stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- "other"
+      }
+    }
+    else stormdata$evtype_cleaned[stormdata$evtype_cleaned==event_orgnames[i]] <- "other"
+}
 ```
 
 Processing the values for the cost for crop and property damage: 
@@ -112,13 +170,19 @@ rm(i,prop_ind,crop_ind,alphabetic,magnitude)
 
 ## Results
 ### Events causing population harm 
-The data contains information on the number of fatalitites and injuries caused by the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types for the full data as well as restricted to the last year in the data. The rationale behind restricting the data to the last year is to better see which types of weather are problematic at the moment, and where efforts to prevent harm should be directed. 
+The data contains information on the number of fatalitites and injuries caused by the different types of weather. To assess how much harm each type of weather does I have counted the number of fatalities and injuries caused by each of the grouped weather types for the full data as well as restricted to the last year in the data. The rationale behind restricting the data to the last year is to better see which types of weather are problematic at the time of data collection, and where efforts to prevent harm should be directed in order to be most efficient.  
 
 
 ```r
 library(ggplot2)
 library(gridExtra)
+```
 
+```
+## Warning: package 'gridExtra' was built under R version 3.2.2
+```
+
+```r
 # sum fatalities and injuries by event type and sort to show events with most fatalities/injuries
 rank.fatal    <- stormdata %>% group_by(evtype_cleaned) %>% summarize(fatal = sum(fatalities)) %>% top_n(10, fatal)
 rank.recentfatal <- stormdata %>% filter(year>=2011) %>% group_by(evtype_cleaned) %>% summarize(rec_fatal = sum(fatalities)) %>% top_n(10, rec_fatal)
@@ -139,9 +203,9 @@ grid.arrange(g1, g2, g3, g4, nrow=2, ncol=2)
 
 ![](RR2_template_files/figure-html/identify_harm-1.png) 
 
-These graphs show the 10 events with the largest number of fatalities or injuries for the full data and when restricting the data to 2011. From the graphs we can see that tornados cause the largest number of injuries and also a large number of fatalities. The biggest cause of fatalitites for data from 2000-2011 is excessive heat which causes a slightly larger number of deaths. Other large causes of fatalitites and injuries are floods, excessive heat, and rip currents.   
+These graphs show the 10 events with the largest number of fatalities or injuries for the full data and when restricting the data to 2011. From the graphs we can see that tornados cause the largest number of injuries and also a large number of fatalities. The second biggest cause of fatalitites for data from 2000-2011 is excessive heat which causes a slightly smaller number of deaths. Other large causes of fatalitites and injuries are floods, excessive heat, and rip currents.   
 
-It can be noted that there is a large number of injuries and fatalites form tornados in 2011. Some [wikipedia reserach](https://en.wikipedia.org/wiki/April_25%E2%80%9328,_2011_tornado_outbreak) shows that this is due to an exceptionally large number of tornado outbreaks in the US in 2011
+It can be noted that there is a large number of injuries and fatalites form tornados in 2011. Some [wikipedia reserach](https://en.wikipedia.org/wiki/April_25%E2%80%9328,_2011_tornado_outbreak) shows that this is due to an exceptionally large number of tornado outbreaks in the US in 2011. 
 
 ### Events with greatest economic consequences 
 
@@ -161,15 +225,13 @@ grid.arrange(g1, g2, nrow=1, ncol=2)
 
 ![](RR2_template_files/figure-html/identify_eco-1.png) 
 
-
 From these plots we see that the event causing the largest damage in million dollars is floods followed by hurricane typhoons and tornados. If we only look at 2011 the pattern is different, with tornados being the largest source of economic damage, closely followed by floods. 
 
 ## Discussion and conclusions 
 The results from this analysis indicates that the events causing most damage (both economical and to the population) are tornados, floods and heat spells. Efforts for preventing weather related damage should be focused on these types of events. 
 
-
 ## Appendix; Exploratory analysis 
-Here are some exploratory searches I performed to better understand the data. They are available for reference (and for my own sake), but are not essential in understanding and interpreting the analysis and results. Please fell free to ignore. 
+Here are some exploratory searches I performed to better understand the data. They are available for reference (and for my own sake), but are not essential in understanding and interpreting the analysis and results. Please feel free to ignore. 
 
 
 ```r
@@ -224,21 +286,59 @@ stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
 ```
 
 ```
-## Source: local data frame [145 x 2]
+## Source: local data frame [48 x 2]
 ## 
-##            evtype_cleaned      n
-##                     (chr)  (int)
-## 1  thunderstorm/lightning 188546
-## 2                    hail 166200
-## 3   flood (several types)  61192
-## 4                 tornado  17687
-## 5               high wind  16411
-## 6              heavy snow  10901
-## 7            winter storm   9774
-## 8              heavy rain   9664
-## 9          winter weather   8040
-## 10           funnel cloud   4637
-## ..                    ...    ...
+##               evtype_cleaned      n
+##                        (chr)  (int)
+## 1                       hail 166449
+## 2          thunderstorm wind 166449
+## 3                flash flood  40586
+## 4                      flood  21478
+## 5                    tornado  17688
+## 6                  high wind  16514
+## 7   marine thunderstorm wind  11987
+## 8                 heavy snow  11226
+## 9               winter storm   9774
+## 10                 lightning   9686
+## ..                       ...    ...
+```
+
+```r
+# which of these are not mapped?
+stormdata.common <- stormdata[!stormdata$evtype_cleaned %in% events,] %>% count(evtype_cleaned)
+stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
+```
+
+```
+## Source: local data frame [1 x 2]
+## 
+##   evtype_cleaned     n
+##            (chr) (int)
+## 1          other   189
+```
+
+```r
+# which are mapped?
+stormdata.common <- stormdata[stormdata$evtype_cleaned %in% events,] %>% count(evtype_cleaned)
+stormdata.common[order(stormdata.common$n, decreasing = TRUE),]
+```
+
+```
+## Source: local data frame [47 x 2]
+## 
+##               evtype_cleaned      n
+##                        (chr)  (int)
+## 1                       hail 166449
+## 2          thunderstorm wind 166449
+## 3                flash flood  40586
+## 4                      flood  21478
+## 5                    tornado  17688
+## 6                  high wind  16514
+## 7   marine thunderstorm wind  11987
+## 8                 heavy snow  11226
+## 9               winter storm   9774
+## 10                 lightning   9686
+## ..                       ...    ...
 ```
 
 ```r
@@ -248,21 +348,21 @@ stormdata.fatal[order(stormdata.fatal$fatalities, decreasing = TRUE),]
 ```
 
 ```
-## Source: local data frame [145 x 2]
+## Source: local data frame [48 x 2]
 ## 
-##            evtype_cleaned fatalities
-##                     (chr)      (dbl)
-## 1    heat (several types)       1244
-## 2                 tornado       1193
-## 3   flood (several types)        870
-## 4  thunderstorm/lightning        735
-## 5             rip current        462
-## 6    cold (several types)        259
-## 7               avalanche        179
-## 8               high wind        131
-## 9            winter storm        104
-## 10            strong wind        100
-## ..                    ...        ...
+##              evtype_cleaned fatalities
+##                       (chr)      (dbl)
+## 1                   tornado       1193
+## 2            excessive heat       1013
+## 3               flash flood        600
+## 4                 lightning        466
+## 5               rip current        462
+## 6                     flood        289
+## 7         thunderstorm wind        248
+## 8                      heat        246
+## 9                 avalanche        179
+## 10  extreme cold wind chill        154
+## ..                      ...        ...
 ```
 
 ```r
@@ -272,21 +372,21 @@ stormdata.injur[order(stormdata.injur$injuries, decreasing = TRUE),]
 ```
 
 ```
-## Source: local data frame [145 x 2]
+## Source: local data frame [48 x 2]
 ## 
-##            evtype_cleaned injuries
-##                     (chr)    (dbl)
-## 1                 tornado    15213
-## 2  thunderstorm/lightning     6218
-## 3    heat (several types)     4930
-## 4       hurricane typhoon     1275
-## 5   flood (several types)     1129
-## 6                wildfire      911
-## 7               high wind      677
-## 8                    hail      545
-## 9          winter weather      483
-## 10           winter storm      436
-## ..                    ...      ...
+##        evtype_cleaned injuries
+##                 (chr)    (dbl)
+## 1             tornado    15213
+## 2      excessive heat     3708
+## 3   thunderstorm wind     3157
+## 4           lightning     2993
+## 5   hurricane typhoon     1291
+## 6                heat     1256
+## 7      winter weather     1165
+## 8            wildfire      911
+## 9         flash flood      812
+## 10          high wind      677
+## ..                ...      ...
 ```
 
 ```r
